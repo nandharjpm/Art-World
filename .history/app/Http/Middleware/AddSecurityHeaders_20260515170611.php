@@ -1,0 +1,53 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use Closure;
+use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
+
+class AddSecurityHeaders
+{
+    /**
+     * Handle an incoming request.
+     *
+     * @param  Closure(Request): (Response)  $next
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        if ((!$request->isSecure() && $request->header('X-Forwarded-Proto') !== 'https') && app()->environment('production')) {
+            return redirect()->secure($request->getRequestUri());
+        }
+
+
+        $response = $next($request);
+        $allowedOrigin = env('CORS_ALLOWED_ORIGIN', '*');
+
+        $response->header->set('Content-Security-Policy', "default-src 'self'; connect-src 'self' https://fonts.googleapis.com; script-src 'self' 'unsafe-inline' blob: https://www.google.com/recaptcha/ https://www.gstatic.com/recaptcha/; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.bunny.net data:; img-src 'self' data: blob:; font-src 'self' https://fonts.googleapis.com https://fonts.gstatic.com https://fonts.bunny.net data:; object-src 'none'; frame-src https://www.google.com/; frame-ancestors 'none'; worker-src blob:; upgrade-insecure-requests;");
+
+        $response->headers->set('X-Frame-Options', 'DENY');
+        $response->headers->set('X-Content-Type-Options', 'nosniff');
+        $response->headers->set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+        $response->headers->set('Referrer-Policy', 'no-referrer-when-downgrade');
+        $response->headers->set('X-XSS-Protection', '1; mode=block');
+        // $response->headers->set('Clear-Site-Data', '"cookies", "storage", "executionContexts"');
+        $response->headers->set('X-Permitted-Cross-Domain-Policies', 'none');
+        $response->headers->set('Feature-Policy', "geolocation 'none'; microphone 'none'; camera 'none'; payment 'none';");
+        $response->headers->set('Permission-Policy', 'geolocation=(), microphone=(), camera=(), fullscreen=(self), payment=()');
+
+        // CORS headers
+        $response->headers->set('Access-Control-Allow-Origin', $allowedOrigin);
+        $response->headers->set('Access-Control-Allow-Methods', 'GET, POST');
+        $response->headers->set('Access-Control-Allow-Headers', 'Content-Type, X-Requested-With, Authorization, Accept');
+        $response->headers->set('Access-Control-Allow-Credentials', env('CORS_ALLOW_CREDENTIALS', 'false'));
+
+        // Cache control
+        if ($request->is('public/assets/*')) {
+            $response->headers->set('Cache-Control', 'public, max-age=31536000');
+        } else {
+            $response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+        }
+
+        return $response;
+    }
+}
